@@ -15,21 +15,23 @@ class ShoppingListBeard(BeardChatHandler):
     __userhelp__ = "Shopping list beard WIP"
 
     __commands__ = [
-        (Filters.text, 'pprint_list', 'Echos everything said by anyone.')
+        ("shoppinglist", 'pprint_list', 'Echos everything said by anyone.')
     ]
 
-    shopping_list_prefix = "Shopping list:"
-    item_prefix = " ☐ "
-    item_done_prefix = " ☑ "
+    shopping_list_prefix = "Shopping list:\n"
+    item_sep = ", "
+    item_prefix = "☐ "
+    item_done_prefix = "☑ "
 
     def make_keyboard(self, items):
         """Make keyboard for shopping list"""
 
         return InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="{}. {}".format(
-                    i, x), callback_data=self.serialize(str(i)))]
-                  for i, x in enumerate(items)
+                [InlineKeyboardButton(
+                    text=x,
+                    callback_data=self.serialize(str(i)))]
+                for i, x in enumerate(items)
             ])
 
     async def pprint_list(self, msg):
@@ -48,9 +50,11 @@ class ShoppingListBeard(BeardChatHandler):
                     "Response: \n"+str(resp))
 
         text = [x.strip() for x in text.split(",")]
+        text = [ShoppingListBeard.item_prefix + x for x in text]
         keyboard = self.make_keyboard(text)  # At this point text is a list
-        text = [ShoppingListBeard.shopping_list_prefix] + text
-        text = "\n{}".format(ShoppingListBeard.item_prefix).join(text)
+        text = ShoppingListBeard.item_sep.join(text)
+        text = ShoppingListBeard.shopping_list_prefix + text
+
         await self.sender.sendMessage(text, reply_markup=keyboard)
 
     async def on_callback_query(self, msg):
@@ -76,8 +80,7 @@ class ShoppingListBeard(BeardChatHandler):
             self.sender.sendMessage("Sorry, something went wrong.")
             raise e
 
-        # Process the text
-        shopping_list = origin_msg['message']['text'].split("\n")[1:]
+        shopping_list = self.parse_shopping_list(origin_msg['message']['text'])
         if ShoppingListBeard.item_prefix in shopping_list[data]:
             shopping_list[data] = shopping_list[data].replace(
                 ShoppingListBeard.item_prefix,
@@ -91,12 +94,8 @@ class ShoppingListBeard(BeardChatHandler):
         else:
             assert False, "Hmm, shouldn't get here..."
 
-        text = [ShoppingListBeard.shopping_list_prefix] + shopping_list
-        text = "\n".join(text)
-
-        shopping_list_items = self.parse_shopping_list(
-            origin_msg['message']['text'])
-        keyboard = self.make_keyboard(shopping_list_items)
+        keyboard = self.make_keyboard(shopping_list)
+        text = self.format_shopping_list(shopping_list)
 
         await self.bot.editMessageText(
             origin_identifier(origin_msg),
@@ -104,9 +103,18 @@ class ShoppingListBeard(BeardChatHandler):
             reply_markup=keyboard,
         )
 
-    def parse_shopping_list(self, text):
-        pattern = "\n{}|\n{}".format(ShoppingListBeard.item_prefix,
-                                     ShoppingListBeard.item_done_prefix)
-        shopping_list = re.split(pattern, text)
+    @classmethod
+    def parse_shopping_list(cls, text):
+        shopping_list = text.replace(
+            ShoppingListBeard.shopping_list_prefix, '')
+        shopping_list = shopping_list.split(
+            ShoppingListBeard.item_sep)
 
-        return shopping_list[1:]
+        return shopping_list
+
+    @classmethod
+    def format_shopping_list(cls, shopping_list):
+        text = ShoppingListBeard.item_sep.join(shopping_list)
+        text = ShoppingListBeard.shopping_list_prefix + text
+
+        return text
