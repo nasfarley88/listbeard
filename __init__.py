@@ -19,7 +19,7 @@ class ShoppingListBeard(BeardChatHandler):
     ]
 
     shopping_list_prefix = "Shopping list:\n"
-    item_sep = ", "
+    item_sep = "\n"
     item_prefix = "☐ "
     item_done_prefix = "☑ "
 
