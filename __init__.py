@@ -15,7 +15,7 @@ class ShoppingListBeard(BeardChatHandler):
     __userhelp__ = "Shopping list beard WIP"
 
     __commands__ = [
-        ("shoppinglist", 'pprint_list', 'Echos everything said by anyone.')
+        ("shoppinglist", 'pprint_list', 'Creates shopping list.')
     ]
 
     shopping_list_prefix = "Shopping list:\n"
