@@ -1,6 +1,7 @@
 from telepot import glance, origin_identifier
 from telepot.namedtuple import InlineKeyboardMarkup, InlineKeyboardButton
 from skybeard.beards import BeardChatHandler, Filters, ThatsNotMineException
+from skybeard import utils
 import logging
 import re
 
@@ -18,7 +19,7 @@ class ListBeard(BeardChatHandler):
         ("checklist", 'pprint_list', 'Creates check list.')
     ]
 
-    check_list_prefix = "Check list:\n"
+    check_list_prefix = "Check list:"
     item_sep = "\n"
     item_prefix = "☐ "
     item_done_prefix = "☑ "
@@ -34,26 +35,52 @@ class ListBeard(BeardChatHandler):
                 for i, x in enumerate(items)
             ])
 
-    async def pprint_list(self, msg):
-        await self.sender.sendMessage('Send me your list (comma separated).')
-        resp = await self.listener.wait()
-        try:
-            text = resp['text']
-        except KeyError:
-            if '_idle' in resp:
-                await self.sender.sendMessage(
-                    "TODO put something witty about timing out here.")
-            await self.sender.sendMessage(
-                "Sorry, I don't think that message included a text component.")
-            if logger.getEffectiveLevel() == logging.DEBUG:
-                await self.sender.sendMessage(
-                    "Response: \n"+str(resp))
-
+    async def comma_list_to_check_list(self, text, title=None):
         text = [x.strip() for x in text.split(",")]
         text = [ListBeard.item_prefix + x for x in text]
         keyboard = self.make_keyboard(text)  # At this point text is a list
-        text = ListBeard.item_sep.join(text)
-        text = ListBeard.check_list_prefix + text
+
+        if title is None:
+            title = ListBeard.check_list_prefix
+
+        text = self.format_check_list(title, text)
+
+        return text, keyboard
+
+    def get_list_title(text):
+        matches = re.findall(
+            r"^(.*?)(?=({}|{}))".format(
+                ListBeard.item_prefix,
+                ListBeard.item_done_prefix,
+            ), text, flags=re.DOTALL)
+        logger.debug("Matches found for list title: "+str(matches))
+
+        return matches[0][0]
+
+    async def pprint_list(self, msg):
+        title = utils.get_args(msg, return_string=True)
+        await self.sender.sendMessage('Send me your list (comma separated).')
+
+        resp = await self.listener.wait()
+
+        try:
+            text = resp['text']
+        except KeyError as e:
+            if '_idle' in resp:
+                await self.sender.sendMessage(
+                    "I'm tired of waiting around."
+                    " Type /checklist again if you still want to make a list.")
+            else:
+                await self.sender.sendMessage(
+                    "Sorry, I don't think that message"
+                    " included a text component.")
+
+            return
+
+        if title:
+            text, keyboard = await self.comma_list_to_check_list(text, title)
+        else:
+            text, keyboard = await self.comma_list_to_check_list(text)
 
         await self.sender.sendMessage(text, reply_markup=keyboard)
 
@@ -67,6 +94,13 @@ class ListBeard(BeardChatHandler):
 
         await self.edit_check_list(msg, data)
 
+    async def on_chat_message(self, msg):
+        if "edit_date" in msg:
+            # This message is edited!
+            self.logger.debug("You just edited a message!")
+        else:
+            await super().on_chat_message(msg)
+
     async def edit_check_list(self, origin_msg, data):
         self.logger.debug("Origin message:\n"+str(origin_msg))
         self.logger.debug("Shopping list as list:\n"+str(
@@ -79,7 +113,8 @@ class ListBeard(BeardChatHandler):
             self.sender.sendMessage("Sorry, something went wrong.")
             raise e
 
-        check_list = self.parse_check_list(origin_msg['message']['text'])
+        list_title, check_list = self.parse_check_list(
+            origin_msg['message']['text'])
         if ListBeard.item_prefix in check_list[data]:
             check_list[data] = check_list[data].replace(
                 ListBeard.item_prefix,
@@ -94,7 +129,7 @@ class ListBeard(BeardChatHandler):
             assert False, "Hmm, shouldn't get here..."
 
         keyboard = self.make_keyboard(check_list)
-        text = self.format_check_list(check_list)
+        text = self.format_check_list(list_title, check_list)
 
         await self.bot.editMessageText(
             origin_identifier(origin_msg),
@@ -104,16 +139,20 @@ class ListBeard(BeardChatHandler):
 
     @classmethod
     def parse_check_list(cls, text):
+        # check_list = text.replace(
+        #     ListBeard.check_list_prefix, '')
+        list_title = cls.get_list_title(text).strip()
         check_list = text.replace(
-            ListBeard.check_list_prefix, '')
+            list_title, '').strip()
         check_list = check_list.split(
             ListBeard.item_sep)
 
-        return check_list
+        return list_title, check_list
 
     @classmethod
-    def format_check_list(cls, check_list):
+    def format_check_list(cls, list_title, check_list):
         text = ListBeard.item_sep.join(check_list)
-        text = ListBeard.check_list_prefix + text
+        # text = ListBeard.check_list_prefix + text
+        text = list_title + "\n" + text
 
         return text
