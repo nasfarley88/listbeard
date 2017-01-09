@@ -8,23 +8,23 @@ import re
 logger = logging.getLogger(__name__)
 
 
-class ShoppingListBeard(BeardChatHandler):
+class ListBeard(BeardChatHandler):
 
     _timeout = 1200
 
     __userhelp__ = "Shopping list beard WIP"
 
     __commands__ = [
-        ("shoppinglist", 'pprint_list', 'Creates shopping list.')
+        ("checklist", 'pprint_list', 'Creates check list.')
     ]
 
-    shopping_list_prefix = "Shopping list:\n"
+    check_list_prefix = "Check list:\n"
     item_sep = "\n"
     item_prefix = "☐ "
     item_done_prefix = "☑ "
 
     def make_keyboard(self, items):
-        """Make keyboard for shopping list"""
+        """Make keyboard for check list"""
 
         return InlineKeyboardMarkup(
             inline_keyboard=[
@@ -50,10 +50,10 @@ class ShoppingListBeard(BeardChatHandler):
                     "Response: \n"+str(resp))
 
         text = [x.strip() for x in text.split(",")]
-        text = [ShoppingListBeard.item_prefix + x for x in text]
+        text = [ListBeard.item_prefix + x for x in text]
         keyboard = self.make_keyboard(text)  # At this point text is a list
-        text = ShoppingListBeard.item_sep.join(text)
-        text = ShoppingListBeard.shopping_list_prefix + text
+        text = ListBeard.item_sep.join(text)
+        text = ListBeard.check_list_prefix + text
 
         await self.sender.sendMessage(text, reply_markup=keyboard)
 
@@ -65,14 +65,13 @@ class ShoppingListBeard(BeardChatHandler):
         except ThatsNotMineException:
             return
 
-        await self.edit_shopping_list(msg, data)
+        await self.edit_check_list(msg, data)
 
-    async def edit_shopping_list(self, origin_msg, data):
-        if logger.getEffectiveLevel() == logging.DEBUG:
-            await self.sender.sendMessage("Origin message:\n"+str(origin_msg))
-            await self.sender.sendMessage("Shopping list as list:\n"+str(
-                self.parse_shopping_list(origin_msg['message']['text'])))
-            await self.sender.sendMessage("Data: "+str(data))
+    async def edit_check_list(self, origin_msg, data):
+        self.logger.debug("Origin message:\n"+str(origin_msg))
+        self.logger.debug("Shopping list as list:\n"+str(
+            self.parse_check_list(origin_msg['message']['text'])))
+        self.logger.debug("Data: "+str(data))
 
         try:
             data = int(data)
@@ -80,22 +79,22 @@ class ShoppingListBeard(BeardChatHandler):
             self.sender.sendMessage("Sorry, something went wrong.")
             raise e
 
-        shopping_list = self.parse_shopping_list(origin_msg['message']['text'])
-        if ShoppingListBeard.item_prefix in shopping_list[data]:
-            shopping_list[data] = shopping_list[data].replace(
-                ShoppingListBeard.item_prefix,
-                ShoppingListBeard.item_done_prefix,
+        check_list = self.parse_check_list(origin_msg['message']['text'])
+        if ListBeard.item_prefix in check_list[data]:
+            check_list[data] = check_list[data].replace(
+                ListBeard.item_prefix,
+                ListBeard.item_done_prefix,
             )
-        elif ShoppingListBeard.item_done_prefix in shopping_list[data]:
-            shopping_list[data] = shopping_list[data].replace(
-                ShoppingListBeard.item_done_prefix,
-                ShoppingListBeard.item_prefix,
+        elif ListBeard.item_done_prefix in check_list[data]:
+            check_list[data] = check_list[data].replace(
+                ListBeard.item_done_prefix,
+                ListBeard.item_prefix,
             )
         else:
             assert False, "Hmm, shouldn't get here..."
 
-        keyboard = self.make_keyboard(shopping_list)
-        text = self.format_shopping_list(shopping_list)
+        keyboard = self.make_keyboard(check_list)
+        text = self.format_check_list(check_list)
 
         await self.bot.editMessageText(
             origin_identifier(origin_msg),
@@ -104,17 +103,17 @@ class ShoppingListBeard(BeardChatHandler):
         )
 
     @classmethod
-    def parse_shopping_list(cls, text):
-        shopping_list = text.replace(
-            ShoppingListBeard.shopping_list_prefix, '')
-        shopping_list = shopping_list.split(
-            ShoppingListBeard.item_sep)
+    def parse_check_list(cls, text):
+        check_list = text.replace(
+            ListBeard.check_list_prefix, '')
+        check_list = check_list.split(
+            ListBeard.item_sep)
 
-        return shopping_list
+        return check_list
 
     @classmethod
-    def format_shopping_list(cls, shopping_list):
-        text = ShoppingListBeard.item_sep.join(shopping_list)
-        text = ShoppingListBeard.shopping_list_prefix + text
+    def format_check_list(cls, check_list):
+        text = ListBeard.item_sep.join(check_list)
+        text = ListBeard.check_list_prefix + text
 
         return text
