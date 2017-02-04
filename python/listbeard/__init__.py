@@ -137,6 +137,10 @@ class ListBeard(BeardChatHandler):
             reply_markup=keyboard,
         )
 
+        query_id, from_id, query_data = glance(origin_msg,
+                                               flavor='callback_query')
+        await self.bot.answerCallbackQuery(query_id, check_list[data])
+
     @classmethod
     def parse_check_list(cls, text):
         # check_list = text.replace(
