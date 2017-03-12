@@ -1,6 +1,7 @@
 from telepot import glance, origin_identifier
 from telepot.namedtuple import InlineKeyboardMarkup, InlineKeyboardButton
-from skybeard.beards import BeardChatHandler, Filters, ThatsNotMineException
+from skybeard.beards import BeardChatHandler, ThatsNotMineException
+from skybeard.predicates import Filters
 from skybeard import utils
 import logging
 import re
