@@ -23,8 +23,9 @@ class ListBeard(BeardChatHandler):
 
     __commands__ = [
         ("checklist", 'pprint_list', 'Creates check list.'),
-        (Filters.text, 'offer_list',
-         "Offers to create a list if enough nouns are said.")
+        (Filters.text_no_cmd, 'offer_list',
+         "Offers to create a list if enough nouns are said."),
+        ("currentlist", 'send_current_list', "Sends the list currently being created")
     ]
 
     check_list_prefix = "Check list:"
@@ -32,10 +33,36 @@ class ListBeard(BeardChatHandler):
     item_prefix = "☐ "
     item_done_prefix = "☑ "
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.current_noun_cache = []
+        self.making_a_list = False
+
+    async def send_current_list(self, msg):
+        await self.sender.sendMessage(
+            "Current list: {}".format(self.current_noun_cache))
+
     async def offer_list(self, msg):
         text = english(msg['text'])
         self.logger.debug("Nouns in the previous message: {}".format(
             [i for i in text.noun_chunks]))
+
+        noun_list = [i for i in text.noun_chunks]
+        word_list = [i for i in text]
+        if len(noun_list) == 1 and len(word_list) < 4:
+            for noun in noun_list:
+                self.current_noun_cache.append(noun)
+        else:
+            self.current_noun_cache = []
+            self.making_a_list = False
+
+        if len(self.current_noun_cache) >= 3 and not self.making_a_list:
+            self.making_a_list = True
+            await self.sender.sendMessage("It looks like you're making a list!")
+        elif self.making_a_list:
+            await self.sender.sendMessage(
+                "{} added to the list.".format(noun_list[0]))
 
     def make_keyboard(self, items):
         """Make keyboard for check list"""
