@@ -8,6 +8,8 @@ import re
 
 import spacy
 
+from . import keyboards
+
 logger = logging.getLogger(__name__)
 
 logger.info("Loading spacy english model")
@@ -59,26 +61,23 @@ class ListBeard(BeardChatHandler):
 
         if len(self.current_noun_cache) >= 3 and not self.making_a_list:
             self.making_a_list = True
-            await self.sender.sendMessage("It looks like you're making a list!")
+            await self.sender.sendMessage(
+                ("It looks like you're making a list!"
+                 "\n\nWould you like me to make a checklist for you?"),
+                reply_markup=await keyboards.make_list_confirmation_kbd(self))
         elif self.making_a_list:
             await self.sender.sendMessage(
                 "{} added to the list.".format(noun_list[0]))
 
-    def make_keyboard(self, items):
+    async def make_keyboard(self, items):
         """Make keyboard for check list"""
 
-        return InlineKeyboardMarkup(
-            inline_keyboard=[
-                [InlineKeyboardButton(
-                    text=x,
-                    callback_data=self.serialize(str(i)))]
-                for i, x in enumerate(items)
-            ])
+        return await keyboards.make_checklist_kbd(self, items)
 
     async def comma_list_to_check_list(self, text, title=None):
         text = [x.strip() for x in text.split(",")]
         text = [ListBeard.item_prefix + x for x in text]
-        keyboard = self.make_keyboard(text)  # At this point text is a list
+        keyboard = await self.make_keyboard(text)  # At this point text is a list
 
         if title is None:
             title = ListBeard.check_list_prefix
@@ -132,7 +131,11 @@ class ListBeard(BeardChatHandler):
         except ThatsNotMineException:
             return
 
-        await self.edit_check_list(msg, data)
+        if len(data) == 1:
+            await self.edit_check_list(msg, data)
+        else:
+            await self.bot.answerCallbackQuery(
+                query_id, "Sorry, that button is still being worked on.")
 
     async def on_chat_message(self, msg):
         if "edit_date" in msg:
@@ -168,7 +171,7 @@ class ListBeard(BeardChatHandler):
         else:
             assert False, "Hmm, shouldn't get here..."
 
-        keyboard = self.make_keyboard(check_list)
+        keyboard = await self.make_keyboard(check_list)
         text = self.format_check_list(list_title, check_list)
 
         await self.bot.editMessageText(
