@@ -1,14 +1,12 @@
 from telepot import glance, origin_identifier
-from telepot.namedtuple import InlineKeyboardMarkup, InlineKeyboardButton
 from skybeard.beards import BeardChatHandler, ThatsNotMineException
 from skybeard.predicates import Filters
 from skybeard import utils
 import logging
-import re
 
 import spacy
 
-from . import keyboards
+from . import keyboards, message_parser, decorators
 
 logger = logging.getLogger(__name__)
 
@@ -27,7 +25,8 @@ class ListBeard(BeardChatHandler):
         ("checklist", 'pprint_list', 'Creates check list.'),
         (Filters.text_no_cmd, 'offer_list',
          "Offers to create a list if enough nouns are said."),
-        ("currentlist", 'send_current_list', "Sends the list currently being created")
+        ("currentlist", 'send_current_list',
+         "Sends the list currently being created")
     ]
 
     check_list_prefix = "Check list:"
@@ -69,14 +68,9 @@ class ListBeard(BeardChatHandler):
             await self.sender.sendMessage(
                 "{} added to the list.".format(noun_list[0]))
 
-    async def make_keyboard(self, items):
-        """Make keyboard for check list"""
-
-        return await keyboards.make_checklist_kbd(self, items)
-
     async def list_to_checklist_msg_args(self, text, title=None):
         text = [ListBeard.item_prefix + x for x in text]
-        keyboard = await self.make_keyboard(text)  # At this point text is a list
+        keyboard = await keyboards.make_checklist_kbd(self, text)  # At this point text is a list
 
         if title is None:
             title = ListBeard.check_list_prefix
@@ -84,20 +78,6 @@ class ListBeard(BeardChatHandler):
         text = await self.format_check_list(title, text)
 
         return {"text": text, "reply_markup": keyboard}
-
-    async def comma_list_to_check_list(self, text, title=None):
-        text = [x.strip() for x in text.split(",")]
-        return await self.list_to_checklist_msg_args(text, title)
-
-    def get_list_title(text):
-        matches = re.findall(
-            r"^(.*?)(?=({}|{}))".format(
-                ListBeard.item_prefix,
-                ListBeard.item_done_prefix,
-            ), text, flags=re.DOTALL)
-        logger.debug("Matches found for list title: "+str(matches))
-
-        return matches[0][0]
 
     async def pprint_list(self, msg):
         title = utils.get_args(msg, return_string=True)
@@ -119,37 +99,28 @@ class ListBeard(BeardChatHandler):
 
             return
 
+        text = [x.strip() for x in text.split(",")]
+
         if title:
-            kwargs = await self.comma_list_to_check_list(text, title)
+            kwargs = await self.list_to_checklist_msg_args(text, title)
         else:
-            kwargs = await self.comma_list_to_check_list(text)
+            kwargs = await self.list_to_checklist_msg_args(text)
 
         await self.sender.sendMessage(**kwargs)
 
-    async def on_callback_query(self, msg):
+    @decorators.deserialize_or_ignore
+    async def on_callback_query(self, msg, deserialized_data):
         query_id, from_id, query_data = glance(msg, flavor='callback_query')
 
-        try:
-            data = self.deserialize(query_data)
-        except ThatsNotMineException:
-            return
-
-        if len(data) == 1:
-            await self.edit_check_list(msg, data)
-        elif data == 'cy':
+        if len(deserialized_data) == 1:
+            await self.edit_check_list(msg, deserialized_data)
+        elif deserialized_data == 'cy':
             kwargs = await self.list_to_checklist_msg_args(
                 [str(x) for x in self.current_noun_cache])
             await self.sender.sendMessage(**kwargs)
         else:
             await self.bot.answerCallbackQuery(
                 query_id, "Sorry, that button is still being worked on.")
-
-    async def on_chat_message(self, msg):
-        if "edit_date" in msg:
-            # This message is edited!
-            self.logger.debug("You just edited a message!")
-        else:
-            await super().on_chat_message(msg)
 
     async def edit_check_list(self, origin_msg, data):
         self.logger.debug("Origin message:\n"+str(origin_msg))
@@ -178,7 +149,7 @@ class ListBeard(BeardChatHandler):
         else:
             assert False, "Hmm, shouldn't get here..."
 
-        keyboard = await self.make_keyboard(check_list)
+        keyboard = await keyboards.make_checklist_kbd(check_list)
         text = await self.format_check_list(list_title, check_list)
 
         await self.bot.editMessageText(
@@ -187,26 +158,22 @@ class ListBeard(BeardChatHandler):
             reply_markup=keyboard,
         )
 
-        query_id, from_id, query_data = glance(origin_msg,
-                                               flavor='callback_query')
+        query_id, from_id, query_data = glance(origin_msg, flavor='callback_query')
         await self.bot.answerCallbackQuery(query_id, check_list[data])
 
     @classmethod
     def parse_check_list(cls, text):
-        # check_list = text.replace(
-        #     ListBeard.check_list_prefix, '')
-        list_title = cls.get_list_title(text).strip()
-        check_list = text.replace(
-            list_title, '').strip()
-        check_list = check_list.split(
-            ListBeard.item_sep)
+        list_title = message_parser.get_list_title(
+            text, ListBeard.item_prefix, ListBeard.item_done_prefix)
+
+        check_list = text.replace(list_title, '').strip()
+        check_list = check_list.split(ListBeard.item_sep)
 
         return list_title, check_list
 
     @classmethod
     async def format_check_list(cls, list_title, check_list):
         text = ListBeard.item_sep.join(check_list)
-        # text = ListBeard.check_list_prefix + text
         text = list_title + "\n" + text
 
         return text
