@@ -6,8 +6,13 @@ from skybeard import utils
 import logging
 import re
 
+import spacy
 
 logger = logging.getLogger(__name__)
+
+logger.info("Loading spacy english model")
+english = spacy.load('en')
+logger.info("Done!")
 
 
 class ListBeard(BeardChatHandler):
@@ -17,13 +22,20 @@ class ListBeard(BeardChatHandler):
     __userhelp__ = "Shopping list beard WIP"
 
     __commands__ = [
-        ("checklist", 'pprint_list', 'Creates check list.')
+        ("checklist", 'pprint_list', 'Creates check list.'),
+        (Filters.text, 'offer_list',
+         "Offers to create a list if enough nouns are said.")
     ]
 
     check_list_prefix = "Check list:"
     item_sep = "\n"
     item_prefix = "☐ "
     item_done_prefix = "☑ "
+
+    async def offer_list(self, msg):
+        text = english(msg['text'])
+        self.logger.debug("Nouns in the previous message: {}".format(
+            [i for i in text.noun_chunks]))
 
     def make_keyboard(self, items):
         """Make keyboard for check list"""
