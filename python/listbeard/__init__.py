@@ -74,8 +74,7 @@ class ListBeard(BeardChatHandler):
 
         return await keyboards.make_checklist_kbd(self, items)
 
-    async def comma_list_to_check_list(self, text, title=None):
-        text = [x.strip() for x in text.split(",")]
+    async def list_to_checklist_msg_args(self, text, title=None):
         text = [ListBeard.item_prefix + x for x in text]
         keyboard = await self.make_keyboard(text)  # At this point text is a list
 
@@ -84,7 +83,11 @@ class ListBeard(BeardChatHandler):
 
         text = await self.format_check_list(title, text)
 
-        return text, keyboard
+        return {"text": text, "reply_markup": keyboard}
+
+    async def comma_list_to_check_list(self, text, title=None):
+        text = [x.strip() for x in text.split(",")]
+        return await self.list_to_checklist_msg_args(text, title)
 
     def get_list_title(text):
         matches = re.findall(
@@ -117,11 +120,11 @@ class ListBeard(BeardChatHandler):
             return
 
         if title:
-            text, keyboard = await self.comma_list_to_check_list(text, title)
+            kwargs = await self.comma_list_to_check_list(text, title)
         else:
-            text, keyboard = await self.comma_list_to_check_list(text)
+            kwargs = await self.comma_list_to_check_list(text)
 
-        await self.sender.sendMessage(text, reply_markup=keyboard)
+        await self.sender.sendMessage(**kwargs)
 
     async def on_callback_query(self, msg):
         query_id, from_id, query_data = glance(msg, flavor='callback_query')
@@ -134,13 +137,9 @@ class ListBeard(BeardChatHandler):
         if len(data) == 1:
             await self.edit_check_list(msg, data)
         elif data == 'cy':
-            items_list = [ListBeard.item_prefix+" "+str(x)
-                          for x in self.current_noun_cache]
-            text = await self.format_check_list(
-                ListBeard.check_list_prefix,
-                items_list)
-            keyboard = await self.make_keyboard(items_list)
-            await self.sender.sendMessage(text, reply_markup=keyboard)
+            kwargs = await self.list_to_checklist_msg_args(
+                [str(x) for x in self.current_noun_cache])
+            await self.sender.sendMessage(**kwargs)
         else:
             await self.bot.answerCallbackQuery(
                 query_id, "Sorry, that button is still being worked on.")
