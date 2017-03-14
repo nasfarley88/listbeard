@@ -82,7 +82,7 @@ class ListBeard(BeardChatHandler):
         if title is None:
             title = ListBeard.check_list_prefix
 
-        text = self.format_check_list(title, text)
+        text = await self.format_check_list(title, text)
 
         return text, keyboard
 
@@ -133,6 +133,14 @@ class ListBeard(BeardChatHandler):
 
         if len(data) == 1:
             await self.edit_check_list(msg, data)
+        elif data == 'cy':
+            items_list = [ListBeard.item_prefix+" "+str(x)
+                          for x in self.current_noun_cache]
+            text = await self.format_check_list(
+                ListBeard.check_list_prefix,
+                items_list)
+            keyboard = await self.make_keyboard(items_list)
+            await self.sender.sendMessage(text, reply_markup=keyboard)
         else:
             await self.bot.answerCallbackQuery(
                 query_id, "Sorry, that button is still being worked on.")
@@ -172,7 +180,7 @@ class ListBeard(BeardChatHandler):
             assert False, "Hmm, shouldn't get here..."
 
         keyboard = await self.make_keyboard(check_list)
-        text = self.format_check_list(list_title, check_list)
+        text = await self.format_check_list(list_title, check_list)
 
         await self.bot.editMessageText(
             origin_identifier(origin_msg),
@@ -197,7 +205,7 @@ class ListBeard(BeardChatHandler):
         return list_title, check_list
 
     @classmethod
-    def format_check_list(cls, list_title, check_list):
+    async def format_check_list(cls, list_title, check_list):
         text = ListBeard.item_sep.join(check_list)
         # text = ListBeard.check_list_prefix + text
         text = list_title + "\n" + text
